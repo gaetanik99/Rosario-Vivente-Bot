@@ -1,10 +1,10 @@
 {
   "name": "rosario-vivente-bot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Rosario Vivente Bot",
+  "main": "bot.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node bot.js"
   },
   "keywords": [],
   "author": "",
