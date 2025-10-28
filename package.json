@@ -4,7 +4,7 @@
   "description": "Rosario Vivente Bot",
   "main": "bot.ts",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.ts"
   },
   "keywords": [],
   "author": "",
