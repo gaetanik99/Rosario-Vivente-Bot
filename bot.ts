@@ -7,19 +7,33 @@ const dotenv = require('dotenv');
 dotenv.config({ path: path.join(__dirname, 'Rosario Vivente Token Telegram Bot.env') });
 
 // Configurazione
-const TOKEN = process.env.BOT_TOKEN; // Legge il token dal file di ambiente
+const TOKEN = process.env.BOT_TOKEN;
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 // File per salvare i dati
 const DATA_FILE = path.join(__dirname, 'partecipanti.json');
 
+// Struttura dati partecipanti
+interface PartecipanteData {
+  numero: number;
+  notificheAttive: boolean;
+}
+
 // Carica i partecipanti dal file
-function caricaPartecipanti(): Map<number, number> {
+function caricaPartecipanti(): Map<number, PartecipanteData> {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const data = fs.readFileSync(DATA_FILE, 'utf8');
       const obj = JSON.parse(data);
-      return new Map(Object.entries(obj).map(([k, v]) => [parseInt(k), v as number]));
+      return new Map(
+        Object.entries(obj).map(([k, v]: [string, any]) => {
+          // Gestione retrocompatibilità: se v è un numero, convertilo in oggetto
+          const partecipanteData: PartecipanteData = typeof v === 'number' 
+            ? { numero: v, notificheAttive: false }
+            : v;
+          return [parseInt(k), partecipanteData];
+        })
+      );
     }
   } catch (error) {
     console.error('Errore nel caricamento dei dati:', error);
@@ -28,7 +42,7 @@ function caricaPartecipanti(): Map<number, number> {
 }
 
 // Salva i partecipanti nel file
-function salvaPartecipanti(partecipanti: Map<number, number>): void {
+function salvaPartecipanti(partecipanti: Map<number, PartecipanteData>): void {
   try {
     const obj = Object.fromEntries(partecipanti);
     fs.writeFileSync(DATA_FILE, JSON.stringify(obj, null, 2), 'utf8');
@@ -70,7 +84,7 @@ const misteri: Mistero[] = [
 
 // Data di riferimento: 2 settembre 2025, partecipante 15, 3° GL (posizione 17)
 const DATA_RIFERIMENTO = new Date('2025-09-02');
-const POSIZIONE_RIFERIMENTO = 17; // 3° GL è la posizione 18 (indice 17)
+const POSIZIONE_RIFERIMENTO = 17;
 const PARTECIPANTE_RIFERIMENTO = 15;
 
 // Carica i partecipanti salvati
@@ -84,17 +98,12 @@ function calcolaMisteroOggi(numeroPartecipante: number): MisteroResult {
   const riferimento = new Date(DATA_RIFERIMENTO);
   riferimento.setHours(0, 0, 0, 0);
   
-  // Calcola giorni passati dalla data di riferimento
   const diffTime = oggi.getTime() - riferimento.getTime();
   const giorniPassati = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   
-  // Calcola la posizione oggi per il partecipante di riferimento
   const posizioneRiferimentoOggi = (POSIZIONE_RIFERIMENTO + giorniPassati) % 20;
-  
-  // Calcola offset tra partecipante attuale e partecipante di riferimento
   const offsetPartecipante = numeroPartecipante - PARTECIPANTE_RIFERIMENTO;
   
-  // Calcola posizione finale
   let posizione = (posizioneRiferimentoOggi + offsetPartecipante) % 20;
   if (posizione < 0) posizione += 20;
   
@@ -121,6 +130,57 @@ function calcolaMisteroDomani(numeroPartecipante: number): MisteroResult {
   return misteri[posizione]!;
 }
 
+// Funzione per inviare il messaggio giornaliero
+function inviaMessaggioGiornaliero(chatId: number, numeroPartecipante: number): void {
+  const mistero = calcolaMisteroOggi(numeroPartecipante);
+  const oggi = new Date().toLocaleDateString('it-IT', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  
+  bot.sendMessage(
+    chatId,
+    `📿 ${oggi}\n\n` +
+    `🙏 Oggi devi recitare:\n*${mistero.nome}*\n\n` +
+    `Messaggio da inviare al gruppo:\n\`${numeroPartecipante}.ok ${mistero.abbreviazione}\``,
+    { 
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '📋 Copia messaggio', callback_data: `copy_${numeroPartecipante}_${mistero.abbreviazione}` }
+        ]]
+      }
+    }
+  ).catch((error: any) => {
+    console.error(`Errore invio messaggio a ${chatId}:`, error);
+  });
+}
+
+// Sistema di notifiche giornaliere
+function avviaNotificheGiornaliere(): void {
+  // Controlla ogni minuto se è l'ora di inviare le notifiche
+  setInterval(() => {
+    const ora = new Date();
+    const oraAttuale = ora.getHours();
+    const minutiAttuali = ora.getMinutes();
+    
+    // Invia notifiche alle 11:00
+    if (oraAttuale === 11 && minutiAttuali === 0) {
+      console.log('🔔 Invio notifiche giornaliere...');
+      
+      partecipanti.forEach((data, chatId) => {
+        if (data.notificheAttive) {
+          inviaMessaggioGiornaliero(chatId, data.numero);
+        }
+      });
+    }
+  }, 60000); // Controlla ogni minuto
+  
+  console.log('🔔 Sistema di notifiche giornaliere attivato (ore 11:00)');
+}
+
 // Comando /start
 bot.onText(/^\/start$/, (msg: any) => {
   const chatId = msg.chat.id;
@@ -131,7 +191,8 @@ bot.onText(/^\/start$/, (msg: any) => {
     'Esempio: /imposta 15\n\n' +
     'Poi usa:\n' +
     '/oggi - Per sapere quale mistero recitare oggi\n' +
-    '/domani - Per sapere quale mistero recitare domani\n'
+    '/domani - Per sapere quale mistero recitare domani\n' +
+    '/notifiche - Attiva/disattiva le notifiche giornaliere (ore 11:00)\n'
   );
 });
 
@@ -158,13 +219,20 @@ bot.onText(/^\/imposta (\d+)$/, (msg: any, match: any) => {
     return;
   }
   
-  partecipanti.set(chatId, numero);
+  const dataEsistente = partecipanti.get(chatId);
+  partecipanti.set(chatId, {
+    numero,
+    notificheAttive: dataEsistente?.notificheAttive || false
+  });
   salvaPartecipanti(partecipanti);
+  
   bot.sendMessage(
     chatId,
     `✅ Numero partecipante impostato: ${numero}\n\n` +
     '💾 Configurazione salvata! Non dovrai più reimpostarla.\n\n' +
-    'Ora puoi usare /oggi per sapere quale mistero recitare oggi!'
+    'Ora puoi usare:\n' +
+    '• /oggi per sapere quale mistero recitare oggi\n' +
+    '• /notifiche per attivare le notifiche giornaliere'
   );
 });
 
@@ -172,11 +240,8 @@ bot.onText(/^\/imposta (\d+)$/, (msg: any, match: any) => {
 bot.on('message', (msg: any) => {
   const chatId = msg.chat.id;
   
-  // Verifica se l'utente è in attesa di inserire un numero
   if (utentiInAttesaNumero.get(chatId) && msg.text && /^\d+$/.test(msg.text)) {
     const numero = parseInt(msg.text);
-    
-    // Rimuovi l'utente dalla lista di attesa
     utentiInAttesaNumero.delete(chatId);
     
     if (numero < 1 || numero > 20) {
@@ -184,13 +249,20 @@ bot.on('message', (msg: any) => {
       return;
     }
     
-    partecipanti.set(chatId, numero);
+    const dataEsistente = partecipanti.get(chatId);
+    partecipanti.set(chatId, {
+      numero,
+      notificheAttive: dataEsistente?.notificheAttive || false
+    });
     salvaPartecipanti(partecipanti);
+    
     bot.sendMessage(
       chatId,
       `✅ Numero partecipante impostato: ${numero}\n\n` +
       '💾 Configurazione salvata! Non dovrai più reimpostarla.\n\n' +
-      'Ora puoi usare /oggi per sapere quale mistero recitare oggi!'
+      'Ora puoi usare:\n' +
+      '• /oggi per sapere quale mistero recitare oggi\n' +
+      '• /notifiche per attivare le notifiche giornaliere'
     );
   }
 });
@@ -198,9 +270,9 @@ bot.on('message', (msg: any) => {
 // Comando /oggi
 bot.onText(/^\/oggi$/, (msg: any) => {
   const chatId = msg.chat.id;
-  const numeroPartecipante = partecipanti.get(chatId);
+  const partecipanteData = partecipanti.get(chatId);
   
-  if (!numeroPartecipante) {
+  if (!partecipanteData) {
     bot.sendMessage(
       chatId,
       '❌ Prima devi impostare il tuo numero con /imposta [numero]\n' +
@@ -209,36 +281,15 @@ bot.onText(/^\/oggi$/, (msg: any) => {
     return;
   }
   
-  const mistero = calcolaMisteroOggi(numeroPartecipante);
-  const oggi = new Date().toLocaleDateString('it-IT', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  
-  bot.sendMessage(
-    chatId,
-    `📿 ${oggi}\n\n` +
-    `🙏 Oggi devi recitare:\n*${mistero.nome}*\n\n` +
-    `Messaggio da inviare al gruppo:\n\`${numeroPartecipante}.ok ${mistero.abbreviazione}\``,
-    { 
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '📋 Copia messaggio', callback_data: `copy_${numeroPartecipante}_${mistero.abbreviazione}` }
-        ]]
-      }
-    }
-  );
+  inviaMessaggioGiornaliero(chatId, partecipanteData.numero);
 });
 
 // Comando /domani
 bot.onText(/^\/domani$/, (msg: any) => {
   const chatId = msg.chat.id;
-  const numeroPartecipante = partecipanti.get(chatId);
+  const partecipanteData = partecipanti.get(chatId);
   
-  if (!numeroPartecipante) {
+  if (!partecipanteData) {
     bot.sendMessage(
       chatId,
       '❌ Prima devi impostare il tuo numero con /imposta [numero]\n' +
@@ -247,7 +298,7 @@ bot.onText(/^\/domani$/, (msg: any) => {
     return;
   }
   
-  const mistero = calcolaMisteroDomani(numeroPartecipante);
+  const mistero = calcolaMisteroDomani(partecipanteData.numero);
   const domani = new Date();
   domani.setDate(domani.getDate() + 1);
   const dataFormattata = domani.toLocaleDateString('it-IT', { 
@@ -261,27 +312,51 @@ bot.onText(/^\/domani$/, (msg: any) => {
     chatId,
     `📿 ${dataFormattata}\n\n` +
     `🙏 Domani dovrai recitare:\n*${mistero.nome}*\n\n` +
-    `Messaggio da inviare al gruppo:\n\`${numeroPartecipante}.ok ${mistero.abbreviazione}\``,
+    `Messaggio da inviare al gruppo:\n\`${partecipanteData.numero}.ok ${mistero.abbreviazione}\``,
     { parse_mode: 'Markdown' }
   );
 });
 
-// Comando /notifiche (placeholder - richiede implementazione avanzata)
+// Comando /notifiche per attivare/disattivare le notifiche
 bot.onText(/^\/notifiche$/, (msg: any) => {
   const chatId = msg.chat.id;
-  bot.sendMessage(
-    chatId,
-    '🔔 Per le notifiche automatiche giornaliere, il bot deve rimanere sempre attivo.\n\n' +
-    'Per ora usa /oggi ogni mattina per sapere quale mistero recitare!'
-  );
+  const partecipanteData = partecipanti.get(chatId);
+  
+  if (!partecipanteData) {
+    bot.sendMessage(
+      chatId,
+      '❌ Prima devi impostare il tuo numero con /imposta [numero]\n' +
+      'Esempio: /imposta 15'
+    );
+    return;
+  }
+  
+  // Toggle dello stato delle notifiche
+  partecipanteData.notificheAttive = !partecipanteData.notificheAttive;
+  partecipanti.set(chatId, partecipanteData);
+  salvaPartecipanti(partecipanti);
+  
+  if (partecipanteData.notificheAttive) {
+    bot.sendMessage(
+      chatId,
+      '🔔 Notifiche giornaliere ATTIVATE!\n\n' +
+      'Riceverai un messaggio ogni giorno alle ore 11:00 con il mistero da recitare.\n\n' +
+      'Per disattivare le notifiche, usa di nuovo /notifiche'
+    );
+  } else {
+    bot.sendMessage(
+      chatId,
+      '🔕 Notifiche giornaliere DISATTIVATE!\n\n' +
+      'Non riceverai più messaggi automatici.\n' +
+      'Puoi sempre usare /oggi per sapere quale mistero recitare.\n\n' +
+      'Per riattivare le notifiche, usa di nuovo /notifiche'
+    );
+  }
 });
 
 // Comando /pulisci per pulire la chat
 bot.onText(/^\/pulisci$/, (msg: any) => {
   const chatId = msg.chat.id;
-  
-  // Su Telegram non è possibile eliminare tutti i messaggi con un solo comando
-  // Inviamo un messaggio con molti caratteri di nuova riga per "pulire" visivamente la chat
   bot.sendMessage(
     chatId,
     '🧹 Pulizia chat...\n\n' + '\n'.repeat(30) + '✨ Chat pulita!'
@@ -308,6 +383,9 @@ bot.on('callback_query', (query: any) => {
   }
 });
 
+// Avvia il sistema di notifiche giornaliere
+avviaNotificheGiornaliere();
 
 console.log('🤖 Bot Rosario Vivente avviato!');
 console.log('💾 I dati vengono salvati in:', DATA_FILE);
+console.log('🔔 Notifiche giornaliere configurate per le ore 11:00');
