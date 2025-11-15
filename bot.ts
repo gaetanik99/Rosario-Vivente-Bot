@@ -340,7 +340,7 @@ bot.onText(/^\/notifiche$/, (msg: any) => {
     bot.sendMessage(
       chatId,
       '🔔 Notifiche giornaliere ATTIVATE!\n\n' +
-      'Riceverai un messaggio ogni giorno alle ore 11:00 con il mistero da recitare.\n\n' +
+      'Riceverai un messaggio ogni giorno alle ore 12:00 con il mistero da recitare.\n\n' +
       'Per disattivare le notifiche, usa di nuovo /notifiche'
     );
   } else {
