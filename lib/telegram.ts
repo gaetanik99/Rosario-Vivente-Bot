@@ -27,7 +27,7 @@ if (!TOKEN) {
 export const bot = new TelegramBot(TOKEN || 'dummy_token', { polling: false });
 
 export async function sendMessage(chatId: number, text: string) {
-  if (!TOKEN) throw new Error("TELEGRAM_BOT_TOKEN non impostato");
+  if (!TOKEN) throw new Error("BOT_TOKEN non impostato");
 
   const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
   const body = {
