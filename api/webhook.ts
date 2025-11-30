@@ -125,12 +125,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await sendMessage(
           chatId,
           '🙏 Benvenuto nel Bot Rosario Vivente!\n\n' +
-          'Usa /imposta [numero] per impostare il tuo numero di partecipante (da 1 a 20)\n' +
-          'Esempio: /imposta 15\n\n' +
-          'Poi usa:\n' +
-          '/oggi - Per sapere quale mistero recitare oggi\n' +
-          '/domani - Per sapere quale mistero recitare domani\n' +
-          '/notifiche - Attiva/disattiva le notifiche giornaliere (ore 11:00)\n'
+          'Per iniziare, tocca qui sotto per impostare il tuo numero:\n' +
+          '👉 /imposta\n\n' +
+          'Una volta fatto, potrai usare questi comandi:\n\n' +
+          '📅 /oggi - Cosa recitare oggi\n' +
+          '⏭️ /domani - Cosa recitare domani\n' +
+          '📖 /istruzioni - Come pregare\n' +
+          '🔔 /notifiche - Ricevi un promemoria ogni mattina'
         );
         return res.status(200).send('OK');
       }
@@ -184,6 +185,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           `📿 ${dataFormattata}\n\n` +
           `🙏 Domani dovrai recitare:\n*${mistero.nome}*\n\n` +
           `Messaggio da inviare al gruppo:\n\`${data.numero}.ok ${mistero.abbreviazione}\``,
+          { parse_mode: 'Markdown' }
+        );
+        return res.status(200).send('OK');
+      }
+
+      // Comando /istruzioni
+      if (text === '/istruzioni') {
+        await sendMessage(
+          chatId,
+          '📿 *Come recitare il S. Rosario per formare la rete di preghiera*\n\n' +
+          '✝️ Si faccia il segno della croce e si dica:\n' +
+          '_O Dio vieni a salvarmi. Signore, vieni presto in mio aiuto_\n\n' +
+          'Gloria al Padre e al Figlio e allo Spirito Santo; come era nel principio, e ora e sempre nei secoli dei secoli. Amen.\n\n' +
+          'Gesù mio, perdona le nostre colpe, preservaci dal fuoco dell’inferno, porta in cielo tutte le anime specialmente le più bisognose della Tua Misericordia.\n\n' +
+          '1. Si recita il Credo\n' +
+          '2. Si recita il Padre Nostro\n' +
+          '3. Si recitano tre Ave Maria per la fede, la speranza, la carità\n' +
+          '4. Si recita il Gloria al Padre\n' +
+          '5. Si enuncia il Mistero affidatovi e di seguito un Padre Nostro\n' +
+          '6. Si recitano 10 Ave Maria\n' +
+          '7. - Si recita il Gloria al Padre;\n' +
+          '   - Gesù mio, perdona le nostre colpe, preservaci dal fuoco dell’inferno, porta in cielo tutte le anime specialmente le più bisognose della Tua Misericordia;\n' +
+          '   - Maria concepita senza peccato, pregate per noi che ricorriamo a Voi;\n' +
+          '   Si recita la Salve Regina.\n' +
+          '8. Si recita un Pater, un Ave e un Gloria secondo le intenzioni del Sommo Pontefice e per le intenzioni personali;\n' +
+          '9. ATTO DI CONSACRAZIONE A MARIA.\n\n' +
+          'Si conclude con il segno della croce.\n' +
+          'Dopo la preghiera ognuno mette un ok sul gruppo whatsapp',
           { parse_mode: 'Markdown' }
         );
         return res.status(200).send('OK');
