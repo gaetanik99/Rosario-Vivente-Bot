@@ -1,1 +1,1 @@
-npx nodemon --exec ts-node bot.ts
+npx nodemon --exec ts-node local-dev.ts
