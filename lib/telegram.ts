@@ -26,6 +26,30 @@ if (!TOKEN) {
 
 export const bot = new TelegramBot(TOKEN || 'dummy_token', { polling: false });
 
+export async function sendMessage(chatId: number, text: string) {
+  if (!TOKEN) throw new Error("TELEGRAM_BOT_TOKEN non impostato");
+
+  const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+  const body = {
+    chat_id: chatId,
+    text: text
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    // Lancia un errore così il webhook ritorna 500 e vedi l'errore nei log
+    throw new Error(`Telegram API Error: ${response.status} ${errorText}`);
+  }
+   
+  return response.json();
+}
+
 // Helper per inviare il messaggio (usato da cron e comandi)
 export async function inviaMessaggioGiornaliero(chatId: number, numeroPartecipante: number) {
   const mistero = calcolaMisteroOggi(numeroPartecipante);
