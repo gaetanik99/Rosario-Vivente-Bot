@@ -8,7 +8,7 @@ if (!BOT_TOKEN) {
   console.error('BOT_TOKEN non trovato!');
 }
 
-// Helper per inviare messaggi via API diretta
+// Helper per inviare messaggi via API diretta 
 async function sendMessage(chatId: number, text: string, options?: any) {
   if (!BOT_TOKEN) throw new Error("BOT_TOKEN non impostato");
 
